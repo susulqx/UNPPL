@@ -23,10 +23,12 @@ on:
 env:
   CONFIGURATION: Release
   PLATFORM: x64
-  # WDK 版本选择:
-  #   留空      = 使用 windows-2022 runner 预装的 WDK 22H2 (10.0.22621), 零安装最快最稳
-  #   例如 10.0.26100 / 10.0.28000 = 在 CI 中用 winget 自动安装指定版本 (VS 17.11+ 会自动集成)
-  WDK_VERSION: ""
+  # WDK 版本:
+  #   runner 镜像预装 WDK 22H2 (10.0.22621), 但 SDK 已是 10.0.26100 —— 版本不匹配
+  #   会导致 "A WDK corresponding to target version '10.0.26100.0' was not found"。
+  #   因此默认安装与 SDK 匹配的 WDK 10.0.26100 (winget 自动安装, VS 17.11+ 自动集成)。
+  #   若换用其它 SDK 版本, 同步改成对应 WDK 版本号即可。
+  WDK_VERSION: "10.0.26100"
   # 是否用自签测试证书给 unppl.sys 打测试签名(便于本机 testsigning 加载测试)
   SIGN_TEST_CERT: "true"
 
@@ -43,19 +45,19 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
-      # ---- 可选: 安装指定版本的 WDK ---------------------------------------
-      # 需要更新 WDK 时, 把上面 WDK_VERSION 改成目标版本号即可。
-      - name: Install WDK (if WDK_VERSION is set)
+      # ---- 安装指定版本的 WDK -----------------------------------------------
+      # 注意: 必须检查 WDK 的 build\ 目录(而不是 SDK 的 Include\ 目录)来判断是否
+      # 已安装——SDK 目录总是存在, 用它判断会误跳过安装。
+      - name: Install WDK ${{ env.WDK_VERSION }}
         if: env.WDK_VERSION != ''
         shell: pwsh
         run: |
           $kitRoot = "${env:ProgramFiles(x86)}\Windows Kits\10"
-          $installed = Get-ChildItem "$kitRoot\Include" -Directory -ErrorAction SilentlyContinue |
-                       Select-Object -ExpandProperty Name
-          $match = $installed | Where-Object { $_ -like "$env:WDK_VERSION.*" }
-          if ($match) {
-            Write-Host "WDK $env:WDK_VERSION already installed ($match)."
+          $wdkTargets = "$kitRoot\build\$env:WDK_VERSION.0\WindowsDriver.common.targets"
+          if (Test-Path $wdkTargets) {
+            Write-Host "WDK $env:WDK_VERSION already installed."
           } else {
+            Write-Host "Installing WDK $env:WDK_VERSION via winget (takes a few minutes)..."
             winget install --source winget --exact --id "Microsoft.WindowsWDK.$env:WDK_VERSION" `
               --accept-package-agreements --accept-source-agreements `
               --silent --disable-interactivity
