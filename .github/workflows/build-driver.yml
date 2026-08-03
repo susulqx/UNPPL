@@ -46,21 +46,31 @@ jobs:
         uses: microsoft/setup-msbuild@v2
 
       # ---- 安装指定版本的 WDK -----------------------------------------------
-      # 注意: 必须检查 WDK 的 build\ 目录(而不是 SDK 的 Include\ 目录)来判断是否
-      # 已安装——SDK 目录总是存在, 用它判断会误跳过安装。
+      # 判断"WDK 已安装"必须检查 WDK 独有的内核头文件 (Include\<ver>\km\wdm.h)。
+      # 不能检查 build\<ver>\ 目录: VS 的驱动集成组件也会往该目录放 targets 文件,
+      # 会误判为已安装而跳过 winget (实测踩坑: 报 "WDK ... was not found")。
       - name: Install WDK ${{ env.WDK_VERSION }}
         if: env.WDK_VERSION != ''
         shell: pwsh
         run: |
           $kitRoot = "${env:ProgramFiles(x86)}\Windows Kits\10"
-          $wdkTargets = "$kitRoot\build\$env:WDK_VERSION.0\WindowsDriver.common.targets"
-          if (Test-Path $wdkTargets) {
+          $kmWdm = "$kitRoot\Include\$env:WDK_VERSION.0\km\wdm.h"
+          if (Test-Path $kmWdm) {
             Write-Host "WDK $env:WDK_VERSION already installed."
           } else {
             Write-Host "Installing WDK $env:WDK_VERSION via winget (takes a few minutes)..."
             winget install --source winget --exact --id "Microsoft.WindowsWDK.$env:WDK_VERSION" `
               --accept-package-agreements --accept-source-agreements `
               --silent --disable-interactivity
+            if ($LASTEXITCODE -ne 0) {
+              Write-Error "winget install WDK failed (exit $LASTEXITCODE)"
+              exit 1
+            }
+            if (-not (Test-Path $kmWdm)) {
+              Write-Error "WDK install finished but kernel headers missing: $kmWdm"
+              exit 1
+            }
+            Write-Host "WDK $env:WDK_VERSION installed OK."
           }
 
       # ---- 用户态控制程序: 普通 C 直接 cl.exe 编译 --------------------------
