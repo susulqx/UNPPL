@@ -1,12 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Directory.Build.props: 仓库级 MSBuild 配置文件。
-     设置 WDKContentRoot 指向 NuGet 包解压目录 (packages/)。
-     NuGet 包内容直接展平在 packages/ 根, 无需版本号子目录。
-     VS 的 WindowsKernelModeDriver10.0 toolset 自动从 WDKContentRoot/build/
-     读取 WDK 驱动构建支持 —— 不需要在此手动 import props。 -->
+     NuGet WDK 包 (nuget restore → packages/) 提供内核头文件和库。
+     WDKContentRoot 设置给 toolset; AdditionalIncludeDirectories/AdditionalLibraryDirectories
+     做兜底——确保 ntifs.h 和 ntoskrnl.lib 无论 toolset 内部逻辑如何都能找到。 -->
 <Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
-    <!-- 包内容直接展平: packages/build/, packages/Include/, packages/Lib/ -->
     <WDKContentRoot>$(MSBuildThisFileDirectory)packages\</WDKContentRoot>
   </PropertyGroup>
+
+  <!-- Debug/Release 通用: 注入 NuGet WDK 包的内核 include 和 lib -->
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>
+        $(WDKContentRoot)Include\10.0.26100.0\km;
+        $(WDKContentRoot)Include\10.0.26100.0\shared;
+        %(AdditionalIncludeDirectories)
+      </AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>
+        $(WDKContentRoot)Lib\10.0.26100.0\km\x64;
+        %(AdditionalLibraryDirectories)
+      </AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
 </Project>
