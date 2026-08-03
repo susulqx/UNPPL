@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Directory.Build.props: 仓库级 MSBuild 配置文件。
+     在 nuget restore 之后,导入 WDK NuGet 包的内核驱动构建支持,
+     使 MSBuild 能找到 WDK 头文件(km/) 和库。 -->
+<Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <WDKPackageVersion>10.0.26100.1882</WDKPackageVersion>
+    <WDKContentRoot>$(MSBuildThisFileDirectory)packages\Microsoft.Windows.WDK.x64.$(WDKPackageVersion)\</WDKContentRoot>
+  </PropertyGroup>
+  <Import Project="$(WDKContentRoot)build\WindowsKernelModeDriver10.0.props"
+          Condition="Exists('$(WDKContentRoot)build\WindowsKernelModeDriver10.0.props')" />
+</Project>
