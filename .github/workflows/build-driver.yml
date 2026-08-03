@@ -46,31 +46,24 @@ jobs:
         uses: microsoft/setup-msbuild@v2
 
       # ---- 安装指定版本的 WDK -----------------------------------------------
-      # 判断"WDK 已安装"必须检查 WDK 独有的内核头文件 (Include\<ver>\km\wdm.h)。
-      # 不能检查 build\<ver>\ 目录: VS 的驱动集成组件也会往该目录放 targets 文件,
-      # 会误判为已安装而跳过 winget (实测踩坑: 报 "WDK ... was not found")。
+      # 无条件 winget 安装 (winget 对已装会返回 0x8A15000F 可识别退出码)。
+      # 之前无论检查 Include\ 目录还是 build\ 目录, 都在镜像上命中 VS 集成
+      # 的半成品文件 → 误判"已安装"→ 跳过 → 实际 WDK 未装。不再判断, 直接装。
       - name: Install WDK ${{ env.WDK_VERSION }}
         if: env.WDK_VERSION != ''
         shell: pwsh
         run: |
-          $kitRoot = "${env:ProgramFiles(x86)}\Windows Kits\10"
-          $kmWdm = "$kitRoot\Include\$env:WDK_VERSION.0\km\wdm.h"
-          if (Test-Path $kmWdm) {
-            Write-Host "WDK $env:WDK_VERSION already installed."
+          winget install --source winget --exact --id "Microsoft.WindowsWDK.$env:WDK_VERSION" `
+            --accept-package-agreements --accept-source-agreements `
+            --silent --disable-interactivity
+          # 0x8A15000F = winget "already installed" 退出码 (非致命)
+          if ($LASTEXITCODE -eq 0x8A15000F) {
+            Write-Host "WDK $env:WDK_VERSION already installed (winget exit $LASTEXITCODE), continuing."
+          } elseif ($LASTEXITCODE -ne 0) {
+            Write-Error "winget install WDK failed (exit $LASTEXITCODE)"
+            exit 1
           } else {
-            Write-Host "Installing WDK $env:WDK_VERSION via winget (takes a few minutes)..."
-            winget install --source winget --exact --id "Microsoft.WindowsWDK.$env:WDK_VERSION" `
-              --accept-package-agreements --accept-source-agreements `
-              --silent --disable-interactivity
-            if ($LASTEXITCODE -ne 0) {
-              Write-Error "winget install WDK failed (exit $LASTEXITCODE)"
-              exit 1
-            }
-            if (-not (Test-Path $kmWdm)) {
-              Write-Error "WDK install finished but kernel headers missing: $kmWdm"
-              exit 1
-            }
-            Write-Host "WDK $env:WDK_VERSION installed OK."
+            Write-Host "WDK $env:WDK_VERSION installed successfully."
           }
 
       # ---- 用户态控制程序: 普通 C 直接 cl.exe 编译 --------------------------
