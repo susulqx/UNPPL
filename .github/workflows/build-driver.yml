@@ -64,10 +64,17 @@ jobs:
       # ---- 用户态控制程序: 普通 C 直接 cl.exe 编译 --------------------------
       # 不引入 vcxproj/WDK, 就是最朴素的 MSVC 编译。如需链接额外库,
       # 在 /link 后追加, 例如: ... /link ws2_32.lib /DEBUG
+      # 注意: 不要用 cmd 的 for/vswhere 去设置 MSVC 环境——GitHub Actions 的
+      # cmd shell 会把脚本写成 .cmd 批处理文件, 循环变量必须写 %%i, 且引号
+      # 嵌套极易解析失败。这里用社区标准做法 ilammy/msvc-dev-cmd 注入环境。
+      - name: Set up MSVC x64 environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: Build UNPPLControl.exe (user-mode, plain C)
         shell: cmd
         run: |
-          for /f "usebackq tokens=*" %i in (`"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath`) do call "%i\Common7\Tools\VsDevCmd.bat" -arch=x64 >nul
           cl.exe /nologo /O2 /W3 /Zi /Fe:UNPPLControl.exe UNPPLControl.c /link /DEBUG
           if errorlevel 1 exit /b 1
           dir UNPPLControl.exe
