@@ -45,6 +45,11 @@
     <TargetName>unppl</TargetName>
   </PropertyGroup>
 
+  <!-- NuGet WDK 包 (packages/) 路径: include 和 lib 通过 AdditionalOptions /I /LIBPATH 注入 -->
+  <PropertyGroup>
+    <WDKContentRoot>$(MSBuildThisFileDirectory)packages\</WDKContentRoot>
+  </PropertyGroup>
+
   <!-- Debug / Release 通用设置 -->
   <ItemDefinitionGroup>
     <ClCompile>
@@ -54,12 +59,13 @@
       <!-- 显式按 C 编译 (unppl.c 是纯 C 内核驱动) -->
       <CompileAs>CompileAsC</CompileAs>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <!-- /I 硬注入 NuGet WDK km 头文件路径 — 不依赖 Directory.Build.props -->
+      <AdditionalOptions>/I"$(WDKContentRoot)Include\10.0.26100.0\km" /I"$(WDKContentRoot)Include\10.0.26100.0\shared" %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
-    <!-- 正式发布如需强制签名校验可取消注释下一行 (未签名驱动将无法加载):
     <Link>
-      <AdditionalOptions>/INTEGRITYCHECK %(AdditionalOptions)</AdditionalOptions>
+      <!-- /LIBPATH 注入 NuGet WDK 内核库路径 -->
+      <AdditionalOptions>/LIBPATH:"$(WDKContentRoot)Lib\10.0.26100.0\km\x64" %(AdditionalOptions)</AdditionalOptions>
     </Link>
-    -->
   </ItemDefinitionGroup>
 
   <!-- Debug 配置: 关闭优化, 便于调试 -->
