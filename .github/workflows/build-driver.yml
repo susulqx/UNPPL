@@ -93,12 +93,11 @@ jobs:
       - name: Restore WDK NuGet package
         shell: pwsh
         run: |
-          # nuget restore 将 WDK 包解压到 packages/ 目录
           nuget restore packages.config -PackagesDirectory packages
-          if (-not (Test-Path "packages\Microsoft.Windows.WDK.x64.10.0.26100.1882\build\WindowsKernelModeDriver10.0.props")) {
-            Write-Error "WDK NuGet package not found after restore"
-            exit 1
-          }
+          Write-Host "Packages directory contents:"
+          Get-ChildItem packages -Directory -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.Name)" }
+          # 不做 Test-Path 校验, 交给 msbuild 通过 Directory.Build.props 引用。
+          # 若路径不对, msbuild 会报找不到 props/include, 届时看上面打印的目录结构调整。
 
       - name: Build unppl.sys (kernel-mode, WDK)
         run: |
