@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ==========================================================================
+     unppl.sys 内核驱动项目文件 (WDK)
+     - 由 VS 的 WDK 集成 / WindowsKernelModeDriver10.0 toolset 提供编译
+     - 输出: $(ProjectDir)\x64\Release\unppl.sys
+     用法: 与 unppl.c 放在同一目录(仓库根目录), 用 msbuild unppl.vcxproj 编译。
+     ========================================================================== -->
+<Project DefaultTargets="Build" ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{7F5A2B31-8E6D-4C12-A345-1B2C3D4E5F60}</ProjectGuid>
+    <RootNamespace>unppl</RootNamespace>
+    <MinimumVisualStudioVersion>16.0</MinimumVisualStudioVersion>
+    <!-- 标记为内核驱动: 触发 WDK 的驱动构建流程 -->
+    <ApplicationType>Driver</ApplicationType>
+    <WindowsDriverType>WDM</WindowsDriverType>
+    <TargetFrameworkVersion />
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>WDM</DriverType>
+    <!-- WDK 提供的 kernel-mode toolset, 自动设置 /DDRIVER=1 等宏与内核链接参数 -->
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <!-- 10.0 通配 = 使用机器上已安装的最新 Windows SDK, 避免版本号不匹配 -->
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <TargetName>unppl</TargetName>
+  </PropertyGroup>
+
+  <!-- Debug / Release 通用设置 -->
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <SDLCheck>false</SDLCheck>
+      <!-- 显式按 C 编译 (unppl.c 是纯 C 内核驱动) -->
+      <CompileAs>CompileAsC</CompileAs>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <!-- 正式发布如需强制签名校验可取消注释下一行 (未签名驱动将无法加载):
+    <Link>
+      <AdditionalOptions>/INTEGRITYCHECK %(AdditionalOptions)</AdditionalOptions>
+    </Link>
+    -->
+  </ItemDefinitionGroup>
+
+  <!-- Debug 配置: 关闭优化, 便于调试 -->
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <!-- Release 配置: 全速优化, 仍生成 PDB 用于排错 -->
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <ItemGroup>
+    <ClCompile Include="unppl.c" />
+  </ItemGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
