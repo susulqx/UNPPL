@@ -24,11 +24,13 @@ env:
   CONFIGURATION: Release
   PLATFORM: x64
   # WDK 版本:
-  #   runner 镜像预装 WDK 22H2 (10.0.22621), 但 SDK 已是 10.0.26100 —— 版本不匹配
-  #   会导致 "A WDK corresponding to target version '10.0.26100.0' was not found"。
-  #   因此默认安装与 SDK 匹配的 WDK 10.0.26100 (winget 自动安装, VS 17.11+ 自动集成)。
-  #   若换用其它 SDK 版本, 同步改成对应 WDK 版本号即可。
-  WDK_VERSION: "10.0.26100"
+  #   runner 预装 WDK 22H2 (10.0.22621), 但 SDK 是 10.0.26100 —— 版本不匹配时
+  #   MSBuild 会报 "WDK corresponding to target version ... was not found"。
+  #   解决: msbuild 命令行显式传递 /p:WindowsTargetPlatformVersion=10.0.22621.0
+  #   使 SDK 与 WDK 版本对齐 (预装 22H2 同时有匹配的 SDK 22621)。
+  #   若需要特定新版 WDK, 设置下面的 WDK_VERSION 并通过 winget 安装。
+  WDK_VERSION: ""
+  WDK_TARGET_VERSION: "10.0.22621.0"
   # 是否用自签测试证书给 unppl.sys 打测试签名(便于本机 testsigning 加载测试)
   SIGN_TEST_CERT: "true"
 
@@ -85,9 +87,11 @@ jobs:
           dir UNPPLControl.exe
 
       # ---- 内核驱动: WDK 编译为 .sys ---------------------------------------
+      # 通过 /p:WindowsTargetPlatformVersion 显式对齐预装 WDK 22H2 (22621),
+      # 避免 vcxproj 的 10.0 通配解析到 SDK 26100 导致版本不匹配。
       - name: Build unppl.sys (kernel-mode, WDK)
         run: |
-          msbuild unppl.vcxproj /m /p:Configuration=${{ env.CONFIGURATION }} /p:Platform=${{ env.PLATFORM }} /v:minimal
+          msbuild unppl.vcxproj /m /p:Configuration=${{ env.CONFIGURATION }} /p:Platform=${{ env.PLATFORM }} /p:WindowsTargetPlatformVersion=${{ env.WDK_TARGET_VERSION }} /v:minimal
 
       # ---- 可选: 自签测试签名, 方便本机加载测试 -----------------------------
       # 失败不阻断构建(未签名驱动在 testsigning 模式下同样可加载)。
