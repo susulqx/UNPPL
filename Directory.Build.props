@@ -1,27 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Directory.Build.props: 仓库级 MSBuild 配置文件。
-     NuGet WDK 包 (nuget restore → packages/) 提供内核头文件和库。
-     WDKContentRoot 设置给 toolset; AdditionalIncludeDirectories/AdditionalLibraryDirectories
-     做兜底——确保 ntifs.h 和 ntoskrnl.lib 无论 toolset 内部逻辑如何都能找到。 -->
+<!-- Directory.Build.props: WDK NuGet 包 (packages/) 注入内核编译依赖。
+     AdditionalIncludeDirectories 会被 WDK toolset 覆写 → 改用 AdditionalOptions
+     (直接 /I 开关硬注入 cl.exe 命令行, 不受任何 MSBuild 属性覆盖影响)。
+     LIBPATH 同理: /LIBPATH 直接传给链接器。 -->
 <Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <WDKContentRoot>$(MSBuildThisFileDirectory)packages\</WDKContentRoot>
   </PropertyGroup>
 
-  <!-- Debug/Release 通用: 注入 NuGet WDK 包的内核 include 和 lib -->
   <ItemDefinitionGroup>
     <ClCompile>
-      <AdditionalIncludeDirectories>
-        $(WDKContentRoot)Include\10.0.26100.0\km;
-        $(WDKContentRoot)Include\10.0.26100.0\shared;
-        %(AdditionalIncludeDirectories)
-      </AdditionalIncludeDirectories>
+      <AdditionalOptions>
+        /I"$(WDKContentRoot)Include\10.0.26100.0\km"
+        /I"$(WDKContentRoot)Include\10.0.26100.0\shared"
+        %(AdditionalOptions)
+      </AdditionalOptions>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>
-        $(WDKContentRoot)Lib\10.0.26100.0\km\x64;
-        %(AdditionalLibraryDirectories)
-      </AdditionalLibraryDirectories>
+      <AdditionalOptions>
+        /LIBPATH:"$(WDKContentRoot)Lib\10.0.26100.0\km\x64"
+        %(AdditionalOptions)
+      </AdditionalOptions>
     </Link>
   </ItemDefinitionGroup>
 </Project>
