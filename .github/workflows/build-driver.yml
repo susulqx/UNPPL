@@ -87,11 +87,22 @@ jobs:
           dir UNPPLControl.exe
 
       # ---- 内核驱动: WDK 编译为 .sys ---------------------------------------
-      # 通过 /p:WindowsTargetPlatformVersion 显式对齐预装 WDK 22H2 (22621),
-      # 避免 vcxproj 的 10.0 通配解析到 SDK 26100 导致版本不匹配。
+      # 使用 WDK NuGet 包 (Microsoft.Windows.WDK.x64) 提供内核头文件和库,
+      # 版本 10.0.26100.1882 匹配 runner 的 SDK 10.0.26100。
+      # Directory.Build.props 自动导入 WDK 构建支持, 无需 /p:WindowsTargetPlatformVersion。
+      - name: Restore WDK NuGet package
+        shell: pwsh
+        run: |
+          # nuget restore 将 WDK 包解压到 packages/ 目录
+          nuget restore packages.config -PackagesDirectory packages
+          if (-not (Test-Path "packages\Microsoft.Windows.WDK.x64.10.0.26100.1882\build\WindowsKernelModeDriver10.0.props")) {
+            Write-Error "WDK NuGet package not found after restore"
+            exit 1
+          }
+
       - name: Build unppl.sys (kernel-mode, WDK)
         run: |
-          msbuild unppl.vcxproj /m /p:Configuration=${{ env.CONFIGURATION }} /p:Platform=${{ env.PLATFORM }} /p:WindowsTargetPlatformVersion=${{ env.WDK_TARGET_VERSION }} /v:minimal
+          msbuild unppl.vcxproj /m /p:Configuration=${{ env.CONFIGURATION }} /p:Platform=${{ env.PLATFORM }} /v:minimal
 
       # ---- 可选: 自签测试签名, 方便本机加载测试 -----------------------------
       # 失败不阻断构建(未签名驱动在 testsigning 模式下同样可加载)。
