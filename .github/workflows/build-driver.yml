@@ -1,0 +1,113 @@
+# ============================================================================
+# Windows WDK + MSVC 驱动云编译工具链 (GitHub Actions)
+# ----------------------------------------------------------------------------
+# 产物:
+#   - UNPPLControl.exe  用户态控制程序(普通 C, 直接 cl.exe 编译, 不依赖 WDK)
+#   - unppl.sys         内核驱动(WDK WindowsKernelModeDriver10.0 toolset)
+# ----------------------------------------------------------------------------
+# 使用方法:
+#   1. 把 .github/ 与 unppl.vcxproj 复制到你仓库根目录
+#   2. 保持 UNPPLControl.c 与 unppl.c 位于仓库根目录
+#   3. push 或手动触发 Actions, 即可从 Actions 页下载 artifacts
+# ============================================================================
+
+name: WDK Driver Build
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:            # 支持在 Actions 页面手动触发
+
+env:
+  CONFIGURATION: Release
+  PLATFORM: x64
+  # WDK 版本选择:
+  #   留空      = 使用 windows-2022 runner 预装的 WDK 22H2 (10.0.22621), 零安装最快最稳
+  #   例如 10.0.26100 / 10.0.28000 = 在 CI 中用 winget 自动安装指定版本 (VS 17.11+ 会自动集成)
+  WDK_VERSION: ""
+  # 是否用自签测试证书给 unppl.sys 打测试签名(便于本机 testsigning 加载测试)
+  SIGN_TEST_CERT: "true"
+
+jobs:
+  build:
+    name: Build UNPPLControl.exe + unppl.sys
+    runs-on: windows-2022
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      # ---- 可选: 安装指定版本的 WDK ---------------------------------------
+      # 需要更新 WDK 时, 把上面 WDK_VERSION 改成目标版本号即可。
+      - name: Install WDK (if WDK_VERSION is set)
+        if: env.WDK_VERSION != ''
+        shell: pwsh
+        run: |
+          $kitRoot = "${env:ProgramFiles(x86)}\Windows Kits\10"
+          $installed = Get-ChildItem "$kitRoot\Include" -Directory -ErrorAction SilentlyContinue |
+                       Select-Object -ExpandProperty Name
+          $match = $installed | Where-Object { $_ -like "$env:WDK_VERSION.*" }
+          if ($match) {
+            Write-Host "WDK $env:WDK_VERSION already installed ($match)."
+          } else {
+            winget install --source winget --exact --id "Microsoft.WindowsWDK.$env:WDK_VERSION" `
+              --accept-package-agreements --accept-source-agreements `
+              --silent --disable-interactivity
+          }
+
+      # ---- 用户态控制程序: 普通 C 直接 cl.exe 编译 --------------------------
+      # 不引入 vcxproj/WDK, 就是最朴素的 MSVC 编译。如需链接额外库,
+      # 在 /link 后追加, 例如: ... /link ws2_32.lib /DEBUG
+      - name: Build UNPPLControl.exe (user-mode, plain C)
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %i in (`"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath`) do call "%i\Common7\Tools\VsDevCmd.bat" -arch=x64 >nul
+          cl.exe /nologo /O2 /W3 /Zi /Fe:UNPPLControl.exe UNPPLControl.c /link /DEBUG
+          if errorlevel 1 exit /b 1
+          dir UNPPLControl.exe
+
+      # ---- 内核驱动: WDK 编译为 .sys ---------------------------------------
+      - name: Build unppl.sys (kernel-mode, WDK)
+        run: |
+          msbuild unppl.vcxproj /m /p:Configuration=${{ env.CONFIGURATION }} /p:Platform=${{ env.PLATFORM }} /v:minimal
+
+      # ---- 可选: 自签测试签名, 方便本机加载测试 -----------------------------
+      # 失败不阻断构建(未签名驱动在 testsigning 模式下同样可加载)。
+      - name: Sign unppl.sys with self-signed test cert
+        if: env.SIGN_TEST_CERT == 'true'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $sys = "x64\$env:CONFIGURATION\unppl.sys"
+          if (-not (Test-Path $sys)) { Write-Error "unppl.sys not found"; exit 1 }
+          $thumb = (New-SelfSignedCertificate -Type CodeSigningCert `
+            -Subject "CN=WorkBuddy CI Test Cert" -CertStoreLocation Cert:\CurrentUser\My).Thumbprint
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+                      Where-Object { $_.FullName -match "\\x64\\" } | Select-Object -First 1
+          if (-not $signtool) { Write-Error "signtool.exe not found"; exit 1 }
+          & $signtool.FullName sign /v /fd SHA256 /s My /sha1 $thumb /t http://timestamp.digicert.com $sys
+          Write-Host "Signed: $sys"
+
+      # ---- 收集产物 ---------------------------------------------------------
+      - name: Collect artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts
+          Copy-Item UNPPLControl.exe artifacts\ -ErrorAction SilentlyContinue
+          Copy-Item UNPPLControl.pdb artifacts\ -ErrorAction SilentlyContinue
+          Copy-Item "x64\$env:CONFIGURATION\unppl.sys" artifacts\ -ErrorAction SilentlyContinue
+          Copy-Item "x64\$env:CONFIGURATION\unppl.pdb" artifacts\ -ErrorAction SilentlyContinue
+          Get-ChildItem artifacts | Select-Object Name, Length
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: driver-binaries
+          path: artifacts/
+          if-no-files-found: error
